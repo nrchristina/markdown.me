@@ -104,7 +104,8 @@ extension EditingDocument {
                 }
                 builder.delete(line.start..<end)
             } else if line.quoteDepth == 0 {
-                builder.insert(buffer.isBlank(index) ? [.greaterThan] : [.greaterThan, .space], at: line.start)
+                let isBetweenLines = buffer.isBlank(index) && first < last
+                builder.insert(isBetweenLines ? [.greaterThan] : [.greaterThan, .space], at: line.start)
             }
         }
         return builder.textEdit(selection: lineSelection(after: builder))

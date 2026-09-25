@@ -45,6 +45,7 @@ struct InlineFormattingTests {
         ("snake_ca‸se", "*snake_ca‸se*"),
         ("«one\ntwo»", "«*one*\n*two*»"),
         ("«Привет»", "*«Привет»*"),
+        ("«😀 wink»", "*«😀 wink»*"),
         ("Ключ ‸", "Ключ *‸*"),
     ])
     func italic(input: String, expected: String) {

@@ -66,6 +66,7 @@ struct BlockFormattingTests {
     @Test(arguments: [
         ("te‸xt", "> te‸xt"),
         ("> te‸xt", "te‸xt"),
+        ("‸", "> ‸"),
         ("«a\n\nb»", "«> a\n>\n> b»"),
         ("«> a\n>\n> b»", "«a\n\nb»"),
         ("> a\n‸b", "> a\n> ‸b"),
