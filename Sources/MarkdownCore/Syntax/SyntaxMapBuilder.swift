@@ -43,6 +43,9 @@ struct SyntaxMapBuilder {
 
     mutating func visit(_ markup: Markup, _ context: Context) {
         switch markup {
+        case is Text, is SoftBreak, is LineBreak:
+            // The most common nodes; checked first so they skip the casts below.
+            return
         case let heading as Heading:
             visitHeading(heading, context)
         case let paragraph as Paragraph:

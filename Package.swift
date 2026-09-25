@@ -19,7 +19,11 @@ let package = Package(
         ),
         .testTarget(
             name: "MarkdownCoreTests",
-            dependencies: ["MarkdownCore"]
+            dependencies: [
+                "MarkdownCore",
+                // Only for the parse-time breakdown in PerformanceTests.
+                .product(name: "Markdown", package: "swift-markdown"),
+            ]
         ),
     ]
 )

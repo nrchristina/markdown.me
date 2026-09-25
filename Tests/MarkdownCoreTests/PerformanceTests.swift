@@ -1,4 +1,5 @@
 import Foundation
+import Markdown
 import Testing
 import MarkdownCore
 
@@ -20,6 +21,29 @@ struct PerformanceTests {
         #expect(duration < .seconds(20 * megabytes))
         #expect((map?.spans.count ?? 0) > 0)
     }
+
+    /// How much of the time is swift-markdown's own parse and tree walk.
+    @Test func breakdown() {
+        let document = largeDocument(bytes: 1_000_000)
+        let clock = ContinuousClock()
+        var parsed: Document?
+        let parse = clock.measure {
+            parsed = Document(parsing: document, options: [.disableSmartOpts])
+        }
+        var nodes = 0
+        let walk = clock.measure {
+            nodes = parsed.map(countNodes) ?? 0
+        }
+        let total = clock.measure {
+            _ = SyntaxMap(parsing: document)
+        }
+        print("SyntaxMap breakdown, 1 MB: swift-markdown parse \(parse), walk of \(nodes) nodes \(walk), SyntaxMap total \(total)")
+        #expect(nodes > 0)
+    }
+}
+
+private func countNodes(_ markup: Markup) -> Int {
+    markup.children.reduce(1) { $0 + countNodes($1) }
 }
 
 private func largeDocument(bytes: Int) -> String {
