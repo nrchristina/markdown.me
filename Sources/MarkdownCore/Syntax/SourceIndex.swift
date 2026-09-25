@@ -17,7 +17,7 @@ final class SourceIndex {
     private var lineUTF16Starts: [Int] = []
     private var lineIsASCII: [Bool] = []
     /// Per-line byte → UTF-16 tables, built on first use for non-ASCII lines.
-    private var utf16Tables: [Int: [Int]] = [:]
+    private var utf16Tables: [[Int]?] = []
 
     init(_ text: String) {
         let bytes = Array(text.utf8)
@@ -55,6 +55,7 @@ final class SourceIndex {
 
         lineStarts = starts
         lineEnds = ends
+        utf16Tables = Array(repeating: nil, count: starts.count)
         lineUTF16Starts = utf16Starts
         lineIsASCII = isASCII
         utf16Count = utf16

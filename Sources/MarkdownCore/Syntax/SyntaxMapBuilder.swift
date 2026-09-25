@@ -32,6 +32,9 @@ struct SyntaxMapBuilder {
         }
     }
 
+    private static let emphasisDelimiters: Set<UInt8> = [.asterisk, .underscore]
+    private static let strikethroughDelimiters: Set<UInt8> = [.tilde]
+
     let index: SourceIndex
     private(set) var spans: [SyntaxSpan] = []
 
@@ -48,11 +51,11 @@ struct SyntaxMapBuilder {
         case .paragraph, .tableCell:
             visitChildren(of: node, inlineContext(for: node, context))
         case .emphasis:
-            visitDelimited(node, .emphasis, delimiters: [.asterisk, .underscore], context)
+            visitDelimited(node, .emphasis, delimiters: Self.emphasisDelimiters, context)
         case .strong:
-            visitDelimited(node, .strong, delimiters: [.asterisk, .underscore], context)
+            visitDelimited(node, .strong, delimiters: Self.emphasisDelimiters, context)
         case .strikethrough:
-            visitDelimited(node, .strikethrough, delimiters: [.tilde], context)
+            visitDelimited(node, .strikethrough, delimiters: Self.strikethroughDelimiters, context)
         case .code:
             visitInlineCode(node, context)
         case .link:

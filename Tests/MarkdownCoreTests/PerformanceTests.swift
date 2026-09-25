@@ -6,7 +6,7 @@ import Testing
 /// typing latency on large files. The limit only catches pathological
 /// slowdowns (debug builds are slow); the printed time is the number to
 /// track, ideally from `swift test -c release --filter Performance`.
-@Suite("Performance")
+@Suite("Performance", .serialized)
 struct PerformanceTests {
     @Test(arguments: [1, 5])
     func parsesLargeDocuments(megabytes: Int) {
