@@ -1,7 +1,6 @@
 import Foundation
-import Markdown
 import Testing
-import MarkdownCore
+@testable import MarkdownCore
 
 /// Full-document parse time. The editor re-parses on edits, so this bounds
 /// typing latency on large files. The limit only catches pathological
@@ -22,28 +21,25 @@ struct PerformanceTests {
         #expect((map?.spans.count ?? 0) > 0)
     }
 
-    /// How much of the time is swift-markdown's own parse and tree walk.
+    /// How much of the time is cmark's own parse.
     @Test func breakdown() {
         let document = largeDocument(bytes: 1_000_000)
         let clock = ContinuousClock()
-        var parsed: Document?
-        let parse = clock.measure {
-            parsed = Document(parsing: document, options: [.disableSmartOpts])
-        }
         var nodes = 0
-        let walk = clock.measure {
-            nodes = parsed.map(countNodes) ?? 0
+        let parse = clock.measure {
+            let parsed = CMarkDocument(parsing: document)
+            nodes = withExtendedLifetime(parsed) { countNodes(parsed.root) }
         }
         let total = clock.measure {
             _ = SyntaxMap(parsing: document)
         }
-        print("SyntaxMap breakdown, 1 MB: swift-markdown parse \(parse), walk of \(nodes) nodes \(walk), SyntaxMap total \(total)")
+        print("SyntaxMap breakdown, 1 MB: cmark parse and walk of \(nodes) nodes \(parse), SyntaxMap total \(total)")
         #expect(nodes > 0)
     }
 }
 
-private func countNodes(_ markup: Markup) -> Int {
-    markup.children.reduce(1) { $0 + countNodes($1) }
+private func countNodes(_ node: CMarkNode) -> Int {
+    node.children.reduce(1) { $0 + countNodes($1) }
 }
 
 private func largeDocument(bytes: Int) -> String {

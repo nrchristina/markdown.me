@@ -1,5 +1,3 @@
-import Markdown
-
 // cmark reports inline positions relative to the paragraph it is parsing,
 // and several of its shortcuts leave them wrong in the source:
 //
@@ -32,7 +30,7 @@ struct InlinePositions {
         var shift: Int
     }
 
-    var blockStart: SourceLocation
+    var blockStart: SourcePosition
     /// Ascending by reported position; the first starts at `blockStart`.
     var segments: [Segment]
     /// Byte offsets of the backslashes of `\|` in a table cell.
@@ -46,7 +44,7 @@ struct RowShift {
 }
 
 extension SyntaxMapBuilder {
-    func byteOffset(_ location: SourceLocation, _ context: Context) -> Int {
+    func byteOffset(_ location: SourcePosition, _ context: Context) -> Int {
         let position = trueLocation(location, context.inline, quoteDepth: context.quoteDepth)
         var column = position.column
         if let row = context.row, row.line == position.line {
@@ -60,7 +58,7 @@ extension SyntaxMapBuilder {
         return offset
     }
 
-    func trueLocation(_ location: SourceLocation, _ positions: InlinePositions?, quoteDepth: Int) -> (line: Int, column: Int) {
+    func trueLocation(_ location: SourcePosition, _ positions: InlinePositions?, quoteDepth: Int) -> (line: Int, column: Int) {
         guard let positions, positions.blockStart <= location, var segment = positions.segments.first else {
             return (location.line, location.column)
         }
@@ -78,7 +76,7 @@ extension SyntaxMapBuilder {
     }
 
     /// Context for walking the inline content of `block`.
-    func inlineContext(for block: Markup, _ context: Context) -> Context {
+    func inlineContext(for block: CMarkNode, _ context: Context) -> Context {
         var result = context
         guard let start = block.range?.lowerBound else {
             result.inline = nil
@@ -86,7 +84,7 @@ extension SyntaxMapBuilder {
         }
 
         var escapedPipes: [Int] = []
-        if block is Table.Cell, let range = byteRange(of: block, context), range.count > 1 {
+        if block.kind == .tableCell, let range = byteRange(of: block, context), range.count > 1 {
             escapedPipes = (range.lowerBound..<(range.upperBound - 1)).filter {
                 index.bytes[$0] == .backslash && index.bytes[$0 + 1] == .verticalBar
             }
@@ -98,7 +96,7 @@ extension SyntaxMapBuilder {
         // starts with `[` can have them; find the line where its first text
         // really is.
         let startOffset = index.byteOffset(line: start.line, column: start.column)
-        guard !(block is Table.Cell),
+        guard block.kind != .tableCell,
               let text = firstText(in: block),
               !textMatches(text, result),
               startOffset < index.bytes.count, index.bytes[startOffset] == .openingBracket,
@@ -116,7 +114,7 @@ extension SyntaxMapBuilder {
     }
 
     /// Context for walking a table row's cells.
-    func rowContext(for row: Markup, isHeader: Bool, _ context: Context) -> Context {
+    func rowContext(for row: CMarkNode, isHeader: Bool, _ context: Context) -> Context {
         guard let start = row.range?.lowerBound else { return context }
         let shift: Int
         if isHeader {
@@ -146,10 +144,10 @@ extension SyntaxMapBuilder {
         /// Bytes of text without a usable range seen since the line break.
         var skippedBytes = 0
         /// End of the last element with a range since the line break.
-        var previousEnd: SourceLocation?
+        var previousEnd: SourcePosition?
     }
 
-    private func positions(for block: Markup, start: SourceLocation, firstLine: Int, escapedPipes: [Int], _ context: Context) -> InlinePositions {
+    private func positions(for block: CMarkNode, start: SourcePosition, firstLine: Int, escapedPipes: [Int], _ context: Context) -> InlinePositions {
         let firstShift = firstLine == start.line
             ? 0
             : index.textStartColumn(line: firstLine, quoteDepth: context.quoteDepth) - start.column
@@ -163,9 +161,10 @@ extension SyntaxMapBuilder {
         return positions
     }
 
-    private func calibrate(_ markup: Markup, _ positions: inout InlinePositions, _ state: inout Calibration, quoteDepth: Int) {
+    private func calibrate(_ markup: CMarkNode, _ positions: inout InlinePositions, _ state: inout Calibration, quoteDepth: Int) {
         for child in markup.children {
-            if child is SoftBreak || child is LineBreak {
+            let kind = child.kind
+            if kind == .softBreak || kind == .lineBreak {
                 if let previousEnd = state.previousEnd {
                     state.line = trueLocation(previousEnd, positions, quoteDepth: quoteDepth).line
                 }
@@ -180,7 +179,7 @@ extension SyntaxMapBuilder {
                 // After a backslash break cmark keeps the next line's leading
                 // spaces as text; otherwise text starts at the first
                 // non-space character.
-                let literal = (child as? Text)?.string ?? ""
+                let literal = kind == .text ? child.literal : ""
                 state.leadingSpaces = literal.utf8.prefix { $0.isSpaceOrTab }.count
             }
             if let range = child.range, range.lowerBound < range.upperBound {
@@ -192,18 +191,18 @@ extension SyntaxMapBuilder {
                     state.pending = false
                 }
                 state.previousEnd = range.upperBound
-            } else if state.pending, let text = child as? Text {
+            } else if state.pending, kind == .text {
                 // cmark gives some text (a lone `~`) no usable range.
-                state.skippedBytes += text.string.utf8.count
+                state.skippedBytes += child.literal.utf8.count
             }
             calibrate(child, &positions, &state, quoteDepth: quoteDepth)
         }
     }
 
-    private func firstText(in markup: Markup) -> Text? {
+    private func firstText(in markup: CMarkNode) -> CMarkNode? {
         for child in markup.children {
-            if let text = child as? Text, text.range != nil, !text.string.isEmpty {
-                return text
+            if child.kind == .text, child.range != nil, !child.literal.isEmpty {
+                return child
             }
             if let text = firstText(in: child) {
                 return text
@@ -212,8 +211,8 @@ extension SyntaxMapBuilder {
         return nil
     }
 
-    private func textMatches(_ text: Text, _ context: Context) -> Bool {
+    private func textMatches(_ text: CMarkNode, _ context: Context) -> Bool {
         guard let range = byteRange(of: text, context) else { return false }
-        return index.bytes[range].elementsEqual(text.string.utf8)
+        return index.bytes[range].elementsEqual(text.literal.utf8)
     }
 }

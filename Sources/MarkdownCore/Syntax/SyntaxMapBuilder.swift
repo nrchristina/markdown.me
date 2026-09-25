@@ -1,6 +1,4 @@
-import Markdown
-
-/// Walks a swift-markdown tree and records one `SyntaxSpan` per element.
+/// Walks a cmark-gfm tree and records one `SyntaxSpan` per element.
 ///
 /// Work happens in UTF-8 byte offsets, because that is what cmark reports and
 /// all Markdown syntax characters are ASCII; each span is converted to UTF-16
@@ -41,65 +39,60 @@ struct SyntaxMapBuilder {
         self.index = index
     }
 
-    mutating func visit(_ markup: Markup, _ context: Context) {
-        switch markup {
-        case is Text, is SoftBreak, is LineBreak:
-            // The most common nodes; checked first so they skip the casts below.
+    mutating func visit(_ node: CMarkNode, _ context: Context) {
+        switch node.kind {
+        case .text, .softBreak, .lineBreak:
             return
-        case let heading as Heading:
-            visitHeading(heading, context)
-        case let paragraph as Paragraph:
-            visitChildren(of: paragraph, inlineContext(for: paragraph, context))
-        case let cell as Table.Cell:
-            visitChildren(of: cell, inlineContext(for: cell, context))
-        case let emphasis as Emphasis:
-            visitDelimited(emphasis, .emphasis, delimiters: [.asterisk, .underscore], context)
-        case let strong as Strong:
-            visitDelimited(strong, .strong, delimiters: [.asterisk, .underscore], context)
-        case let strikethrough as Strikethrough:
-            visitDelimited(strikethrough, .strikethrough, delimiters: [.tilde], context)
-        case let code as InlineCode:
-            visitInlineCode(code, context)
-        case let link as Link:
-            visitLinkOrImage(link, .link(destination: link.destination), isImage: false, context)
-        case let image as Image:
-            visitLinkOrImage(image, .image(source: image.source), isImage: true, context)
-        case let html as InlineHTML:
-            emitWithoutMarkers(html, .inlineHTML, context)
-        case let html as HTMLBlock:
-            emitWithoutMarkers(html, .htmlBlock, context)
-        case let codeBlock as CodeBlock:
-            visitCodeBlock(codeBlock, context)
-        case let quote as BlockQuote:
-            visitBlockQuote(quote, context)
-        case let list as UnorderedList:
-            visitChildren(of: list, context.inList())
-        case let list as OrderedList:
-            visitChildren(of: list, context.inList())
-        case let item as ListItem:
-            visitListItem(item, context)
-        case let rule as ThematicBreak:
-            if let range = byteRange(of: rule, context) {
+        case .heading:
+            visitHeading(node, context)
+        case .paragraph, .tableCell:
+            visitChildren(of: node, inlineContext(for: node, context))
+        case .emphasis:
+            visitDelimited(node, .emphasis, delimiters: [.asterisk, .underscore], context)
+        case .strong:
+            visitDelimited(node, .strong, delimiters: [.asterisk, .underscore], context)
+        case .strikethrough:
+            visitDelimited(node, .strikethrough, delimiters: [.tilde], context)
+        case .code:
+            visitInlineCode(node, context)
+        case .link:
+            visitLinkOrImage(node, .link(destination: node.url), isImage: false, context)
+        case .image:
+            visitLinkOrImage(node, .image(source: node.url), isImage: true, context)
+        case .htmlInline:
+            emitWithoutMarkers(node, .inlineHTML, context)
+        case .htmlBlock:
+            emitWithoutMarkers(node, .htmlBlock, context)
+        case .codeBlock:
+            visitCodeBlock(node, context)
+        case .blockQuote:
+            visitBlockQuote(node, context)
+        case .bulletList, .orderedList:
+            visitList(node, context)
+        case .item:
+            visitListItem(node, ordinal: nil, context)
+        case .thematicBreak:
+            if let range = byteRange(of: node, context) {
                 emit(.thematicBreak, range: range, content: range.upperBound..<range.upperBound, markers: [range])
             }
-        case let table as Table:
-            visitTable(table, context)
-        case let head as Table.Head:
-            visitChildren(of: head, rowContext(for: head, isHeader: true, context))
-        case let row as Table.Row:
-            visitChildren(of: row, rowContext(for: row, isHeader: false, context))
-        default:
-            visitChildren(of: markup, context)
+        case .table:
+            visitTable(node, context)
+        case .tableHeader:
+            visitChildren(of: node, rowContext(for: node, isHeader: true, context))
+        case .tableRow:
+            visitChildren(of: node, rowContext(for: node, isHeader: false, context))
+        case .document, .other:
+            visitChildren(of: node, context)
         }
     }
 
     // MARK: - Elements
 
-    private mutating func visitHeading(_ heading: Heading, _ context: Context) {
+    private mutating func visitHeading(_ heading: CMarkNode, _ context: Context) {
         let inline = inlineContext(for: heading, context)
         defer { visitChildren(of: heading, inline) }
         guard let range = byteRange(of: heading, context), !range.isEmpty else { return }
-        let kind = SyntaxKind.heading(level: heading.level)
+        let kind = SyntaxKind.heading(level: heading.headingLevel)
 
         if index.bytes[range.lowerBound] == .numberSign {
             visitATXHeading(kind, range)
@@ -159,7 +152,7 @@ struct SyntaxMapBuilder {
     /// `**bold**`, `*em*`, `~~strike~~`. The markers are exactly the
     /// element's delimiters next to its content; a leftover delimiter that
     /// cmark includes in the range (`**foo*`) is literal text and stays out.
-    private mutating func visitDelimited(_ markup: Markup, _ kind: SyntaxKind, delimiters: Set<UInt8>, _ context: Context) {
+    private mutating func visitDelimited(_ markup: CMarkNode, _ kind: SyntaxKind, delimiters: Set<UInt8>, _ context: Context) {
         defer { visitChildren(of: markup, context) }
         guard let range = byteRange(of: markup, context) else { return }
         guard let content = delimitedContent(of: markup, context),
@@ -181,12 +174,12 @@ struct SyntaxMapBuilder {
     /// cmark gives `***a***` the same range for the outer and the inner
     /// element; the outer one's content is then the inner one with its
     /// delimiters.
-    private func delimitedContent(of markup: Markup, _ context: Context) -> Range<Int>? {
+    private func delimitedContent(of markup: CMarkNode, _ context: Context) -> Range<Int>? {
         guard let range = byteRange(of: markup, context),
               let content = contentRange(of: markup, context) else { return nil }
         let children = markup.children.filter { $0.range != nil }
         if content == range, children.count == 1, let child = children.first,
-           child is Emphasis || child is Strong || child is Strikethrough {
+           [.emphasis, .strong, .strikethrough].contains(child.kind) {
             guard let inner = delimitedContent(of: child, context),
                   let width = delimiterWidth(of: child, content: inner) else { return nil }
             return (inner.lowerBound - width)..<(inner.upperBound + width)
@@ -194,11 +187,11 @@ struct SyntaxMapBuilder {
         return content
     }
 
-    private func delimiterWidth(of markup: Markup, content: Range<Int>) -> Int? {
-        switch markup {
-        case is Emphasis:
+    private func delimiterWidth(of markup: CMarkNode, content: Range<Int>) -> Int? {
+        switch markup.kind {
+        case .emphasis:
             return 1
-        case is Strong:
+        case .strong:
             return 2
         default:
             // Strikethrough: `~` or `~~`, the same on both sides.
@@ -216,7 +209,7 @@ struct SyntaxMapBuilder {
         }
     }
 
-    private mutating func visitInlineCode(_ code: InlineCode, _ context: Context) {
+    private mutating func visitInlineCode(_ code: CMarkNode, _ context: Context) {
         guard let range = byteRange(of: code, context) else { return }
         var openingEnd = range.lowerBound
         while openingEnd < range.upperBound, index.bytes[openingEnd] == .backtick {
@@ -236,7 +229,7 @@ struct SyntaxMapBuilder {
     }
 
     /// `[text](url)`, `[text][ref]`, `<https://…>`, `![alt](src)`.
-    private mutating func visitLinkOrImage(_ markup: Markup, _ kind: SyntaxKind, isImage: Bool, _ context: Context) {
+    private mutating func visitLinkOrImage(_ markup: CMarkNode, _ kind: SyntaxKind, isImage: Bool, _ context: Context) {
         defer { visitChildren(of: markup, context) }
         guard let range = byteRange(of: markup, context) else { return }
         let openingPrefix = isImage ? "![" : "["
@@ -260,9 +253,9 @@ struct SyntaxMapBuilder {
         }
     }
 
-    private mutating func visitCodeBlock(_ block: CodeBlock, _ context: Context) {
+    private mutating func visitCodeBlock(_ block: CMarkNode, _ context: Context) {
         guard let range = byteRange(of: block, context), !range.isEmpty else { return }
-        let kind = SyntaxKind.codeBlock(language: block.language)
+        let kind = SyntaxKind.codeBlock(language: block.fenceInfo)
 
         let firstLine = index.lineIndex(containing: range.lowerBound)
         let firstLineEnd = min(index.lineEnds[firstLine], range.upperBound)
@@ -272,11 +265,7 @@ struct SyntaxMapBuilder {
             fenceEnd += 1
         }
         let fenceLength = fenceEnd - range.lowerBound
-        // swift-markdown does not say whether a block is fenced. An indented
-        // block keeps its first line in `code`; a fenced one does not.
-        let firstLineText = String(decoding: index.bytes[range.lowerBound..<firstLineEnd], as: UTF8.self)
-        let isFenced = (fence == .backtick || fence == .tilde) && fenceLength >= 3
-            && !block.code.hasPrefix(firstLineText)
+        let isFenced = block.isFenced && (fence == .backtick || fence == .tilde) && fenceLength >= 3
         guard isFenced else {
             emit(kind, range: range, content: range, markers: [])
             return
@@ -293,7 +282,7 @@ struct SyntaxMapBuilder {
         emit(kind, range: range, content: contentStart..<contentEnd, markers: [opening] + (closing.map { [$0] } ?? []))
     }
 
-    private mutating func visitBlockQuote(_ quote: BlockQuote, _ context: Context) {
+    private mutating func visitBlockQuote(_ quote: CMarkNode, _ context: Context) {
         let inner = context.inQuote()
         defer { visitChildren(of: quote, inner) }
         guard let range = byteRange(of: quote, context), !range.isEmpty else { return }
@@ -315,10 +304,24 @@ struct SyntaxMapBuilder {
         emit(.blockQuote(depth: inner.quoteDepth), range: range, content: contentStart..<range.upperBound, markers: markers)
     }
 
-    private mutating func visitListItem(_ item: ListItem, _ context: Context) {
+    /// Items get their number here: the list knows where it starts.
+    private mutating func visitList(_ list: CMarkNode, _ context: Context) {
+        let inner = context.inList()
+        let isOrdered = list.kind == .orderedList
+        var ordinal = list.listStart
+        for child in list.children {
+            if child.kind == .item {
+                visitListItem(child, ordinal: isOrdered ? ordinal : nil, inner)
+                ordinal += 1
+            } else {
+                visit(child, inner)
+            }
+        }
+    }
+
+    private mutating func visitListItem(_ item: CMarkNode, ordinal: Int?, _ context: Context) {
         defer { visitChildren(of: item, context) }
         guard let range = byteRange(of: item, context), !range.isEmpty else { return }
-        let ordinal = (item.parent as? OrderedList).map { Int($0.startIndex) + item.indexInParent }
         let kind = SyntaxKind.listItem(ordinal: ordinal, depth: max(context.listDepth - 1, 0))
         let lineEnd = index.lineEnds[index.lineIndex(containing: range.lowerBound)]
 
@@ -344,10 +347,10 @@ struct SyntaxMapBuilder {
         let marker = range.lowerBound..<position
         var contentStart = position
 
-        if let checkbox = item.checkbox, position + 3 <= lineEnd,
+        if let isChecked = item.isChecked, position + 3 <= lineEnd,
            index.bytes[position] == .openingBracket, index.bytes[position + 2] == .closingBracket {
             let box = position..<(position + 3)
-            emit(.taskCheckbox(isChecked: checkbox == .checked), range: box,
+            emit(.taskCheckbox(isChecked: isChecked), range: box,
                  content: box.upperBound..<box.upperBound, markers: [box])
             contentStart = box.upperBound
             while contentStart < lineEnd, index.bytes[contentStart].isSpaceOrTab {
@@ -357,7 +360,7 @@ struct SyntaxMapBuilder {
         emit(kind, range: range, content: min(contentStart, range.upperBound)..<range.upperBound, markers: [marker])
     }
 
-    private mutating func visitTable(_ table: Table, _ context: Context) {
+    private mutating func visitTable(_ table: CMarkNode, _ context: Context) {
         defer { visitChildren(of: table, context) }
         guard var range = byteRange(of: table, context) else { return }
         // A table that interrupts a paragraph is reported as starting with
@@ -370,12 +373,12 @@ struct SyntaxMapBuilder {
         emit(.table, range: range, content: range, markers: [])
     }
 
-    private mutating func emitWithoutMarkers(_ markup: Markup, _ kind: SyntaxKind, _ context: Context) {
+    private mutating func emitWithoutMarkers(_ markup: CMarkNode, _ kind: SyntaxKind, _ context: Context) {
         guard let range = byteRange(of: markup, context) else { return }
         emit(kind, range: range, content: range, markers: [])
     }
 
-    private mutating func visitChildren(of markup: Markup, _ context: Context) {
+    private mutating func visitChildren(of markup: CMarkNode, _ context: Context) {
         for child in markup.children {
             visit(child, context)
         }
@@ -392,7 +395,7 @@ struct SyntaxMapBuilder {
 
     // MARK: - Positions
 
-    func byteRange(of markup: Markup, _ context: Context) -> Range<Int>? {
+    func byteRange(of markup: CMarkNode, _ context: Context) -> Range<Int>? {
         guard let range = markup.range else { return nil }
         let lower = byteOffset(range.lowerBound, context)
         var upper = byteOffset(range.upperBound, context)
@@ -408,7 +411,7 @@ struct SyntaxMapBuilder {
 
     /// From the start of the first child to the end of the last one. Empty
     /// child ranges carry no position and are skipped.
-    private func contentRange(of markup: Markup, _ context: Context) -> Range<Int>? {
+    private func contentRange(of markup: CMarkNode, _ context: Context) -> Range<Int>? {
         var lower = Int.max
         var upper = Int.min
         for child in markup.children {
@@ -484,10 +487,10 @@ struct SyntaxMapBuilder {
         return position..<markerEnd
     }
 
-    private func firstCell(in markup: Markup) -> Table.Cell? {
+    private func firstCell(in markup: CMarkNode) -> CMarkNode? {
         for child in markup.children {
-            if let cell = child as? Table.Cell {
-                return cell
+            if child.kind == .tableCell {
+                return child
             }
             if let cell = firstCell(in: child) {
                 return cell

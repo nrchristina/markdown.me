@@ -8,22 +8,21 @@ let package = Package(
         .library(name: "MarkdownCore", targets: ["MarkdownCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.9.0"),
+        .package(url: "https://github.com/swiftlang/swift-cmark.git", from: "0.9.0"),
     ],
     targets: [
         // Pure logic, never AppKit or SwiftUI, so it builds and tests on Linux
         // as well as macOS.
         .target(
             name: "MarkdownCore",
-            dependencies: [.product(name: "Markdown", package: "swift-markdown")]
+            dependencies: [
+                .product(name: "cmark-gfm", package: "swift-cmark"),
+                .product(name: "cmark-gfm-extensions", package: "swift-cmark"),
+            ]
         ),
         .testTarget(
             name: "MarkdownCoreTests",
-            dependencies: [
-                "MarkdownCore",
-                // Only for the parse-time breakdown in PerformanceTests.
-                .product(name: "Markdown", package: "swift-markdown"),
-            ]
+            dependencies: ["MarkdownCore"]
         ),
     ]
 )

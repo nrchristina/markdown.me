@@ -1,4 +1,3 @@
-import Markdown
 
 /// Semantic map of a Markdown document: which ranges of the source are
 /// headings, emphasis, list markers and so on.
@@ -20,9 +19,11 @@ public struct SyntaxMap: Hashable, Sendable {
 
     public init(parsing text: String) {
         let index = SourceIndex(text)
-        let document = Document(parsing: text, options: [.disableSmartOpts])
+        let document = CMarkDocument(parsing: text)
         var builder = SyntaxMapBuilder(index: index)
-        builder.visit(document, SyntaxMapBuilder.Context())
+        withExtendedLifetime(document) {
+            builder.visit(document.root, SyntaxMapBuilder.Context())
+        }
 
         // By start, enclosing before enclosed; equal ranges (cmark gives
         // `***a***` the same range for its emphasis and its strong) keep the
