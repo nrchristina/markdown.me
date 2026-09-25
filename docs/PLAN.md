@@ -21,7 +21,8 @@
 | Режим «Markdown» | raw-текст + подсветка синтаксиса, SF Mono | ТЗ §8 |
 | Режим «Текст» | live preview: маркеры скрыты (null-глифы TextKit 1), кроме строки с курсором | WYSIWYG-ощущение без отдельной модели документа |
 | Текстовый движок | NSTextView на TextKit 1, созданный явно | скрытие глифов через `NSLayoutManagerDelegate` есть только в TextKit 1 |
-| Парсер | `apple/swift-markdown` (cmark-gfm), GFM включён | точные source ranges; конвертация UTF-8 → UTF-16 обязательна |
+| Парсер | `swiftlang/swift-markdown` (cmark-gfm), GFM включён | source ranges есть, но у инлайн-элементов cmark местами ошибается — `MarkdownCore` их исправляет (`InlinePositions.swift`); UTF-8 → UTF-16 обязательно |
+| CI | GitHub Actions: `swift test` для `MarkdownCore` на Linux на каждый push | облачные сессии не могут собрать приложение, но логику проверить могут |
 | Форматирование | чистые функции `(text, selection) → TextEdit` в MarkdownCore | одинаково в обоих режимах, покрыто unit-тестами |
 | Цвет и размер | inline HTML `<span style="…">`, именованная палитра, ступени размера | в Markdown этого нет; другие редакторы span показывают, GitHub просто выкинет style |
 | Файлы | без песочницы, прямые URL; workspace — папка; явное сохранение ⌘S | не App Store (ТЗ §1) |

@@ -19,4 +19,8 @@
 
 ## Команды
 
-Появятся в MD-1 (сборка, тесты, запуск) и MD-2 (lint токенов).
+- `swift test` — тесты `MarkdownCore` (работают и на Linux; в GitHub Actions
+  гоняются на каждый push, см. `.github/workflows/core-tests.yml`).
+- `swift test -c release -Xswiftc -enable-testing --filter Performance` — замер
+  разбора больших документов.
+- Сборка и запуск приложения появятся в MD-1, lint токенов — в MD-2.
