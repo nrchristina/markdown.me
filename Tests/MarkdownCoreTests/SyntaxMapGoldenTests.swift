@@ -217,4 +217,25 @@ let goldenCases: [GoldenCase] = [
         .init(.htmlBlock, "<div>\n*not em*\n</div>", content: "<div>\n*not em*\n</div>", markers: []),
         .init(.emphasis, "*em*", content: "em", markers: ["*", "*"]),
     ]),
+    GoldenCase("tabs after markers", "-\tfoo *x*\n\n1.\t[ ] task *w*\n\n#\tTitle\t*t*\t##", [
+        .init(.listItem(ordinal: nil, depth: 0), "-\tfoo *x*", content: "foo *x*", markers: ["-\t"]),
+        .init(.emphasis, "*x*", content: "x", markers: ["*", "*"]),
+        .init(.listItem(ordinal: 1, depth: 0), "1.\t[ ] task *w*", content: "task *w*", markers: ["1.\t"]),
+        .init(.taskCheckbox(isChecked: false), "[ ]", content: "", markers: ["[ ]"]),
+        .init(.emphasis, "*w*", content: "w", markers: ["*", "*"]),
+        .init(.heading(level: 1), "#\tTitle\t*t*\t##", content: "Title\t*t*", markers: ["#\t", "\t##"]),
+        .init(.emphasis, "*t*", content: "t", markers: ["*", "*"]),
+    ]),
+    GoldenCase("tabs in a quote and a nested list", ">\tquote *y*\n>\tmore **z**\n\n- a\n\t- nested *n*", [
+        .init(.blockQuote(depth: 1), ">\tquote *y*\n>\tmore **z**", content: "quote *y*\n>\tmore **z**", markers: [">\t", ">\t"]),
+        .init(.emphasis, "*y*", content: "y", markers: ["*", "*"]),
+        .init(.strong, "**z**", content: "z", markers: ["**", "**"]),
+        .init(.listItem(ordinal: nil, depth: 0), "- a\n\t- nested *n*", content: "a\n\t- nested *n*", markers: ["- "]),
+        .init(.listItem(ordinal: nil, depth: 1), "- nested *n*", content: "nested *n*", markers: ["- "]),
+        .init(.emphasis, "*n*", content: "n", markers: ["*", "*"]),
+    ]),
+    GoldenCase("tabs in a table", "|\ta\t|\tb\t|\n|---|---|\n|\t*c*\t|\td\t|", [
+        .init(.table, "|\ta\t|\tb\t|\n|---|---|\n|\t*c*\t|\td\t|", content: "|\ta\t|\tb\t|\n|---|---|\n|\t*c*\t|\td\t|", markers: []),
+        .init(.emphasis, "*c*", content: "c", markers: ["*", "*"]),
+    ]),
 ]

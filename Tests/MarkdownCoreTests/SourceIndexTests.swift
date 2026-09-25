@@ -45,10 +45,12 @@ struct SourceIndexTests {
     }
 
     @Test func findsWhereALinesTextStarts() {
-        let index = SourceIndex(">  > x\n   y\nz")
+        let index = SourceIndex(">  > x\n   y\nz\n>\t\tw")
         #expect(index.textStartColumn(line: 1, quoteDepth: 2) == 6)
         #expect(index.textStartColumn(line: 1, quoteDepth: 1) == 4)
         #expect(index.textStartColumn(line: 2, quoteDepth: 1) == 4)
         #expect(index.textStartColumn(line: 3, quoteDepth: 0) == 1)
+        // Tabs count as one byte each.
+        #expect(index.textStartColumn(line: 4, quoteDepth: 1) == 4)
     }
 }
