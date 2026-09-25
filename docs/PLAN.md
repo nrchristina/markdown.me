@@ -23,7 +23,7 @@
 | Текстовый движок | NSTextView на TextKit 1, созданный явно | скрытие глифов через `NSLayoutManagerDelegate` есть только в TextKit 1 |
 | Парсер | cmark-gfm напрямую (`swiftlang/swift-cmark`), GFM: таблицы, зачёркивание, задачи | swift-markdown поверх того же cmark тратит 235 мс на 1 МБ только на своё дерево; у инлайн-элементов cmark местами ошибается в позициях — `MarkdownCore` их исправляет (`InlinePositions.swift`); UTF-8 → UTF-16 обязательно |
 | CI | GitHub Actions: `swift test` для `MarkdownCore` на Linux на каждый push | облачные сессии не могут собрать приложение, но логику проверить могут |
-| Форматирование | чистые функции `(text, selection) → TextEdit` в MarkdownCore | одинаково в обоих режимах, покрыто unit-тестами |
+| Форматирование | чистые функции `(text, selection) → TextEdit` в MarkdownCore: `FormattingCommand.edit(in:selection:syntax:)` для тулбара и меню, `ListEditing` для Enter, Tab, ⇧Tab и чекбоксов. Одна минимальная правка в UTF-16; `nil` — править нечего (у `ListEditing` — клавиша не обработана) | одинаково в обоих режимах, покрыто unit-тестами; одна правка — один шаг undo |
 | Цвет и размер | inline HTML `<span style="…">`, именованная палитра, ступени размера | в Markdown этого нет; другие редакторы span показывают, GitHub просто выкинет style |
 | Файлы | без песочницы, прямые URL; workspace — папка; явное сохранение ⌘S | не App Store (ТЗ §1) |
 | PDF | markdown → HTML + print CSS → offscreen WKWebView → NSPrintOperation | нормальная пагинация без своего движка вёрстки |

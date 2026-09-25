@@ -20,6 +20,7 @@ struct InlineFormattingTests {
         // Line by line, leaving list and heading markers out.
         ("«one\ntwo»", "«**one**\n**two**»"),
         ("«**one**\n**two**»", "«one\ntwo»"),
+        ("«**one**\ntwo»", "«**one**\n**two**»"),
         ("«- one\n- two»", "«- **one**\n- **two**»"),
         ("«# Title»", "# **«Title»**"),
         // Bold that the selection only partly covers merges into the new bold.
