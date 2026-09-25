@@ -86,8 +86,9 @@ extension EditingDocument {
         while last > first, buffer.isBlank(last) {
             last -= 1
         }
-        let quoted = (first...last).filter { buffer.line($0).quoteDepth > 0 }
-        let removing = !quoted.isEmpty && (first...last).allSatisfy { quoted.contains($0) || buffer.isBlank($0) }
+        let isQuoted = { (line: Int) in self.buffer.line(line).quoteDepth > 0 }
+        let removing = (first...last).contains(where: isQuoted)
+            && (first...last).allSatisfy { isQuoted($0) || buffer.isBlank($0) }
 
         var builder = EditBuilder(buffer)
         for index in first...last {
